@@ -1,38 +1,44 @@
-import { component$, Slot, useStyles$ } from "@builder.io/qwik";
-import { routeLoader$ } from "@builder.io/qwik-city";
-import type { RequestHandler } from "@builder.io/qwik-city";
+import { component$, Slot, useContextProvider, useStore, useTask$ } from '@builder.io/qwik'
+import { type DocumentHead, routeLoader$ } from '@builder.io/qwik-city'
+import { DataType, type FirstData, getInitialStore, loadStore, type SecondData, STORE } from '~/stores/global'
 
-import Header from "~/components/starter/header/header";
-import Footer from "~/components/starter/footer/footer";
-
-import styles from "./styles.css?inline";
-
-export const onGet: RequestHandler = async ({ cacheControl }) => {
-  // Control caching for this request for best performance and to reduce hosting costs:
-  // https://qwik.builder.io/docs/caching/
-  cacheControl({
-    // Always serve a cached response by default, up to a week stale
-    staleWhileRevalidate: 60 * 60 * 24 * 7,
-    // Max once every 5 seconds, revalidate on the server to get a fresh version of this page
-    maxAge: 5,
-  });
-};
-
-export const useServerTimeLoader = routeLoader$(() => {
-  return {
-    date: new Date().toISOString(),
-  };
-});
+export const useRouteLoader = routeLoader$(async ({ params }) => {
+  const store = await loadStore(params.path)
+  return store
+})
 
 export default component$(() => {
-  useStyles$(styles);
+  const storeData = useRouteLoader()
+  const store = useStore(getInitialStore())
+  useContextProvider(STORE, store)
+
+  useTask$(({ track }) => {
+    track(() => storeData.value)
+    Object.assign(store, storeData.value)
+  })
+
   return (
-    <>
-      <Header />
-      <main>
-        <Slot />
-      </main>
-      <Footer />
-    </>
-  );
-});
+    <div>
+      <Slot />
+    </div>
+  )
+})
+
+export const head: DocumentHead = ({ resolveValue }) => {
+  const store = resolveValue(useRouteLoader)
+  if (store.dataType === DataType.first) {
+    const data = store.data as FirstData
+    return {
+      title: `${data.key1.key1} - First Title`
+    }
+  } else if (store.dataType === DataType.second) {
+    const data = store.data as SecondData
+    return {
+      title: `${data.key2.key2} - Second Title`
+    }
+  } else {
+    return {
+      title: 'Empty Title'
+    }
+  }
+}
